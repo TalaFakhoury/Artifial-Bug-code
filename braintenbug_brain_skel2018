@@ -1,0 +1,345 @@
+#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Oct  9 19:49:12 2018
+
+@author: talafakhoury
+"""
+
+## This code makes the bug move towards the food in a good enough pace. 
+# baseline code for food seeking bug 
+
+
+from brian2 import *
+import matplotlib.pyplot as plt
+map_size = 100
+global foodx, foody, food_count, bug_plot, food_plot, sr_plot, sl_plot,outbugx,outbugy,outbugang,outfoodx,outfoody,outsrx,outsry,outslx,outsly
+L = 1;
+food_count = 0
+foodx=50
+foody=50
+duration=1000
+outbugx=np.zeros(int(duration/2))
+outbugy=np.zeros(int(duration/2))
+outbugang=np.zeros(int(duration/2))
+outfoodx=np.zeros(int(duration/2))
+outfoody=np.zeros(int(duration/2))
+outsrx=np.zeros(int(duration/2))
+outsry=np.zeros(int(duration/2))
+outslx=np.zeros(int(duration/2))
+outsly=np.zeros(int(duration/2))
+outI_r=np.zeros(int(duration/2))
+
+# Sensor neurons 
+# parameters for the Izikevich integrate and fire models for the two sensory neurons
+# input to these cells couls be a current with I being a function of distance or, 
+
+# add function to represent smell propogation in the space, where it has specific values 
+# across the map, and is the strongest at the source of food.
+# the strength of the smell can be integrated in the velocity to make is go faster as
+# it is getting closer to the food
+
+# add memory component to have it remember the location of the food 
+a = 0.02
+b = 0.2
+c = -65
+d = 0.5
+
+I0 = 1250
+tau_ampa=1.0
+g_synpk=0.67
+g_synmaxval=(g_synpk/(tau_ampa*exp(-1)))
+Esyn_e = 0
+Esyn_i = -80
+
+# firing depending on eucledian distance from food source to x y coordinates of bug
+# x a d y location
+
+# here we can change the equation of I
+
+sensor_eqs_e = '''
+
+dv/dt = ((0.04*(v**2) + 5*v + 140 - u +g_ampa*(Esyn_e-v)+ I))/ms:  1
+du/dt = (a*(b*v - u))/ms : 1
+
+dg_ampa/dt = (-g_ampa/tau_ampa +z)/ms : 1
+dz/dt = (-(z)/tau_ampa)/ms : 1
+
+x : 1   
+y : 1
+x_disp : 1
+y_disp : 1
+foodxx : 1
+foodyy : 1
+mag :1
+I = I0 / sqrt(((x-foodxx)**2+(y-foodyy)**2)): 1
+'''
+
+# odor gradient equation
+# I = I0*10*exp(-0.01*sqrt(((x-foodxx)**2+(y-foodyy)**2))) : 1
+# eucledian distance equation
+# I = I0 / sqrt(((x-foodxx)**2+(y-foodyy)**2)): 1
+
+
+# I is a functino of eucledian distance 
+# for the izkevich model equations
+
+sensor_reset = '''
+v = c
+u = u + d
+'''
+
+# sensor right
+sr = NeuronGroup(1, sensor_eqs_e, clock=Clock(0.2*ms), threshold = "v>=30", reset = sensor_reset,method='euler')
+sr.v = c
+sr.u = c*b
+sr.x_disp = 5
+sr.y_disp = 5
+sr.x = sr.x_disp
+sr.y = sr.y_disp
+sr.foodxx = foodx
+sr.foodyy = foody
+sr.mag=1
+
+# sensor left
+sl = NeuronGroup(1, sensor_eqs_e, clock=Clock(0.2*ms), threshold = "v>=30", reset = sensor_reset,method='euler')
+sl.v = c
+sl.u = c*b
+sl.x_disp = -5
+sl.y_disp = 5
+sl.x = sl.x_disp
+sl.y = sl.y_disp
+sl.foodxx = foodx
+sl.foodyy = foody
+sl.mag=1
+
+
+sbr = NeuronGroup(1, sensor_eqs_e, clock=Clock(0.2*ms), threshold = "v>=30", reset = sensor_reset,method='euler')
+sbr.v = c
+sbr.u = c*b
+sbr.foodxx = foodx
+sbr.foodyy = foody
+sbr.mag=0
+
+sbl = NeuronGroup(1, sensor_eqs_e, clock=Clock(0.2*ms), threshold = "v>=30", reset = sensor_reset,method='euler')
+sbl.v = c
+sbl.u = c*b
+sbl.foodxx = foodx
+sbl.foodyy = foody
+sbl.mag=0
+
+
+# The virtual bug
+
+taum = 4
+# baselline velocity of movement 
+base_speed = 9.5
+# how fast it turns, how well and accurately it can sense the locaiton of the source
+# if rate turn is fast, it turns directly towards the source of the food 
+turn_rate = 30*Hz
+
+# rotation equations that direct the movement with regards to firing 
+# equations for movement here. They correspond to the motor neurons - movement - muscles almost
+# but don't really do anything 
+
+bug_eqs = '''
+
+I : 1
+
+dx/dt = 0.05*(v*cos(angle))/ms :1
+dy/dt = 0.05*v*sin(angle)/ms : 1
+v = (motorl+motorr)/2 + base_speed: 1
+dangle/dt = ((motorr-motorl)*turn_rate*ms/L)/ms :1
+dmotorl/dt = -motorl/taum/ms : 1
+dmotorr/dt = -motorr/taum/ms : 1
+
+
+'''
+# add the delta n in the on pre 
+
+# coordinations for bug should also be contained in a group
+bug = NeuronGroup(1, bug_eqs, clock=Clock(0.2*ms),method='euler')
+bug.motorl = 0
+bug.motorr = 0
+bug.angle = pi/2
+bug.x = 0
+bug.y = 0
+
+
+# Synapses (sensors communicate with bug motor)
+
+# Crossing left and right to creative aggressive bug and not coward bug, 
+# because if theres food to the right, we will have higher firing in the right sensor 
+# and we want to make the robot turn right, so we slow down the right wheel and 
+# increase the speed of the left one relative to each other 
+
+# but since we don't have wheels, we use the firing of the second or motor neuron caused by 
+# the sensory neurons to get velocity by integrating firing rate, just how we did 
+# in exploration 3. The velocity is then used in the turning of the body directly 
+# and these equations go directly into bug_eqs where the velocity is in a dfq 
+# for orientation and position of the body
+
+w = 10
+syn_rr=Synapses(sr, sbl, clock=Clock(0.2*ms), model='''
+                g_synmax:1
+                ''',
+		on_pre='''
+		z+= g_synmax
+		''')
+
+
+
+
+syn_rr.connect(i=[0],j=[0])
+syn_rr.g_synmax=g_synmaxval
+
+syn_ll=Synapses(sl, sbr, clock=Clock(0.2*ms), model='''
+                g_synmax:1
+                ''',
+		on_pre='''
+		z+= g_synmax
+		''')
+		
+syn_ll.connect(i=[0],j=[0])
+syn_ll.g_synmax=g_synmaxval
+
+# connecting the motors (body of the bug) to the motor neurons
+
+syn_r = Synapses(sbr, bug, clock=Clock(0.2*ms), on_pre='motorr += w')
+syn_r.connect(i=[0],j=[0])
+syn_l = Synapses(sbl, bug, clock=Clock(0.2*ms), on_pre='motorl += w')
+syn_l.connect(i=[0],j=[0])
+
+
+
+f = figure(1)
+bug_plot = plot(bug.x, bug.y, 'ko')
+food_plot = plot(foodx, foody, 'b*')
+sr_plot = plot([0], [0], 'w')   # Just leaving it blank for now
+sl_plot = plot([0], [0], 'w')
+# Additional update rules (not covered/possible in above eqns)
+
+
+# how things change at every stepa
+
+@network_operation()
+def update_positions():
+    global foodx, foody, food_count
+    sr.x = bug.x + sr.x_disp*sin(bug.angle)+ sr.y_disp*cos(bug.angle) 
+    sr.y = bug.y + - sr.x_disp*cos(bug.angle) + sr.y_disp*sin(bug.angle) 
+
+    sl.x = bug.x +  sl.x_disp*sin(bug.angle)+sl.y_disp*cos(bug.angle)
+    sl.y = bug.y  - sl.x_disp*cos(bug.angle)+sl.y_disp*sin(bug.angle) 
+    
+
+
+
+    if ((bug.x-foodx)**2+(bug.y-foody)**2) < 16:
+	food_count += 1
+	foodx = randint(-map_size+10, map_size-10)
+	foody = randint(-map_size+10, map_size-10)
+
+    if (bug.x < -map_size):
+        bug.x = -map_size
+        bug.angle = pi - bug.angle
+    if (bug.x > map_size):
+	bug.x = map_size
+	bug.angle = pi - bug.angle
+    if (bug.y < -map_size):
+	bug.y = -map_size
+	bug.angle = -bug.angle
+    if (bug.y > map_size):
+	bug.y = map_size
+	bug.angle = -bug.angle
+
+    sr.foodxx = foodx
+    sr.foodyy = foody
+    sl.foodxx = foodx
+    sl.foodyy = foody
+
+@network_operation(dt=2*ms)
+def update_plot(t):
+    global foodx, foody, bug_plot, food_plot, sr_plot, sl_plot,outbugx,outbugy,outbugang,outfoodx,outfoody,outsrx,outsry,outslx,outsly
+    indx=int(.5*t/ms+1)
+    bug_plot[0].remove()
+    food_plot[0].remove()
+    sr_plot[0].remove()
+    sl_plot[0].remove()
+    bug_x_coords = [bug.x, bug.x-4*cos(bug.angle), bug.x-8*cos(bug.angle)]    # ant-like body
+    bug_y_coords = [bug.y, bug.y-4*sin(bug.angle), bug.y-8*sin(bug.angle)]
+    outbugx[indx-1]=bug.x[0]
+    outbugy[indx-1]=bug.y[0]
+    outbugang[indx-1]=bug.angle[0]
+    outfoodx[indx-1]=foodx
+    outfoody[indx-1]=foody
+    outsrx[indx-1]=sr.x[0]
+    outsry[indx-1]=sr.y[0]
+    outslx[indx-1]=sl.x[0]
+    outsly[indx-1]=sl.y[0]
+    
+    outI_r[indx-1]=sl.I[0]
+    
+    bug_plot = plot(bug_x_coords, bug_y_coords, 'ko')     # Plot the bug's current position
+    sr_plot = plot([bug.x, sr.x], [bug.y, sr.y], 'b')
+    sl_plot = plot([bug.x, sl.x], [bug.y, sl.y], 'r')
+    food_plot = plot(foodx, foody, 'b*')
+    axis([-100,100,-100,100])
+    draw()
+    #print "."
+    pause(0.01)
+
+
+SL = StateMonitor(sl, ('v', 'I'), record=True)
+SR = StateMonitor(sr, ('v', 'I'), record=True)
+MB = StateMonitor(bug, ('motorl', 'motorr', 'angle', 'x', 'y'), record = True)
+MR = StateMonitor(sbr, ('v'), record = True)
+ML = StateMonitor(sbl, ('v'), record = True)
+
+
+run(duration*ms,report='text')
+np.save('outbugx',outbugx)
+np.save('outbugy',outbugy)
+np.save('outbugang',outbugang)
+np.save('outfoodx',outfoodx)
+np.save('outfoody',outfoody)
+np.save('outsrx',outsrx)
+np.save('outsry',outsry)
+np.save('outslx',outslx)
+np.save('outsly',outsly)
+np.save('outI_r',outI_r)
+
+
+figure(1)
+title('Activity of sensory neurons')
+subplot(6,1,1)
+plot(SL.t/ms, SL.I[0],'r')
+xlabel('Time in ms')
+ylabel('Current in nA')
+subplot(6,1,2)
+plot(SL.t/ms, SL.v[0]/mV,'r')
+xlabel('Time in ms')
+ylabel('Activity SL')
+subplot(6,1,3)
+plot(MR.t/ms, MR.v[0]/mV,'r')
+xlabel('Time in ms')
+ylabel('Activity SBR')
+subplot(6,1,4)
+plot(SR.t/ms, SR.I[0])
+ylabel('Current in nA')
+xlabel('Time in ms')
+subplot(6,1,5)
+plot(SR.t/ms, SR.v[0]/mV)
+xlabel('Time in ms')
+ylabel('Activity SR')
+subplot(6,1,6)
+plot(ML.t/ms, ML.v[0]/mV)
+ylabel('Activity SBL')
+xlabel('Time in ms')
+
+
+figure(2)
+subplot(2,1,1)
+title('Velocity for motor right and left respectively')
+plot(MB.t/ms, MB.motorr[0],'r')
+subplot(2,1,2)
+plot(MB.t/ms, MB.motorl[0])
