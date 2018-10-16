@@ -1,0 +1,75 @@
+#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Sep 23 15:53:19 2018
+Modified on Saturday Oct 13 
+@author: talafakhoury
+"""
+
+from brian2 import *
+defaultclock.dt=.0005*ms
+duration = 100*ms
+TAdt=0.001*ms
+G=0*arange(0,duration/TAdt)
+G[35000]=1.0 #time in timesteps that an event takes place 3500 is 3500*.01*ms or 35.0 ms
+G[56000]=1.0
+A1=TimedArray(G,dt=TAdt)
+I=A1
+vt = 1.*mV         # Spiking threshold
+memc = 200.0*pfarad  # Membrane capacitance
+bgcurrent = 200*pA   # External current
+tau_m=1*ms
+g_synpk=0.67*siemens
+transwdth=1.0*ms
+
+
+tau_decay = 1*ms
+tau_rise = 1*ms
+
+
+## added equations in the system 
+eqs_neurons='''
+dv/dt=-v/tau_m + I(t)*mag : volt  #create a fake event to trigger a tspike
+
+dg/dt = -g/tau_decay+z/ms : siemens
+dz/dt = -z/tau_rise + I(t)*siemens/ms : siemens
+
+Trpre= 0.25*(tanh((t/ms-tspike/ms)/.005)-tanh((t/ms-(tspike/ms +transwdth/ms))/.005)):1
+
+mag: volt/second
+tspike:second
+'''
+
+# ###########################################
+# Initialize neuron group
+# ###########################################
+
+neurons = NeuronGroup(1, model=eqs_neurons, clock=Clock(defaultclock.dt), threshold='v > vt',
+                      reset='v=0*mV;r=g_synpk;tspike=t',refractory='0.3*ms',method="euler")
+
+neurons.mag=1200.0*mV/ms
+neurons.v=0.0*mV
+neurons.tspike=-100.0*ms  #needed so a spike does not happen at time 0
+# Comment these two lines out to see what happens without Synapses
+
+
+M = StateMonitor(neurons, ('v','g','Trpre'), record=True)
+sm = SpikeMonitor(neurons)
+
+run(duration)
+figure(1)
+subplot(3,1,1) # plot of the fake voltage used to trigger a release
+plot(M.t/ms, M.v[0]/mV, '-b')
+ylabel('pre-synaptic potential')
+xlim(0,duration/ms)
+subplot(3,1,2) #plot of the neurotransmitter release
+plot(M.t/ms, M.Trpre[0], '-r', lw=2)
+xlim(0,duration/ms)
+ylabel('neurotransmitter release')
+subplot(3,1,3) #plot of the conductance 
+plot(M.t/ms, M.g[0]/nsiemens, '-g', lw=2)
+ylabel('post-synaptic conductance nS')
+xlim(0,duration/ms)
+xlabel('time in ms')
+show()
+
