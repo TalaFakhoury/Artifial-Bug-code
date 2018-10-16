@@ -6,5 +6,5 @@ Repository contains:
 - Modified bug code included obstacle avoidance: Project_bug
 - Display code provided by Craig Henriquez: showbug
 - Izhikevich model test code for bug: Izhikevich_bug
-- Modified STDP couple with Izhikevich code : Izistdp
+- Modified STDP couple with Izhikevich code : izistdp
 - Alpha conductance model test code for bug: alpha_bug_model
