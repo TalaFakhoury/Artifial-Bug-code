@@ -1,0 +1,73 @@
+#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Sep 23 21:58:23 2018
+
+@author: chenriq
+"""
+# edits tf68 
+
+from brian2 import *
+import numpy as np
+Ox=np.load('outbugx.npy')
+Oy=np.load('outbugy.npy')
+srx=np.load('outsrx.npy')
+sry=np.load('outsry.npy')
+slx=np.load('outslx.npy')
+sly=np.load('outsly.npy')
+Ba=np.load('outbugang.npy')
+Fx=np.load('outfoodx.npy')
+Fy=np.load('outfoody.npy')
+## Added saved variables for location of obstacle
+## and plotting of currents and firing
+Px=np.load('outpoisonx.npy')
+Py=np.load('outpoisony.npy')
+I = np.load('outI_r.npy')
+Ip = np.load('outI_p.npy')
+vr = np.load('outv_r.npy')
+vp= np.load('outv_p.npy')
+
+
+for i in range(0,500):
+           # Remove the last bug's position from the figure window
+    bug_x_coords = [Ox[i], Ox[i]-4*cos(Ba[i]), Ox[i]-8*cos(Ba[i])]
+    bug_y_coords = [Oy[i], Oy[i]-4*sin(Ba[i]), Oy[i]-8*sin(Ba[i])]
+    bug_plot = plot(bug_x_coords, bug_y_coords, 'ko')    # Plot the bug's current position
+    sr_plot = plot([Ox[i], srx[i]], [Oy[i], sry[i]], 'b')
+    sl_plot = plot([Ox[i], slx[i]], [Oy[i], sly[i]], 'r')
+    
+    food_plot=plot(Fx[i], Fy[i], 'b*') 
+    poison_plot = plot(Px[i],Py[i],'r*') # adding obstacle plot 
+    
+    axis([-100,100,-100,100])
+    draw()
+    pause(0.02)
+    bug_plot[0].remove()
+    food_plot[0].remove() 
+    poison_plot[0].remove()
+    sr_plot[0].remove()
+    sl_plot[0].remove()
+
+
+# plot for firing when compared to distance 
+figure(2)
+subplot(6,1,1)
+plot(sqrt(((Ox-Fx)**2) + ((Oy-Fy)**2)))
+ylabel('Distance from food')
+subplot(6,1,2)
+plot(I)
+ylabel('Current for SR')
+subplot(6,1,3)
+plot(vr)
+ylabel('Activity of SR')
+subplot(6,1,4)
+ylabel('Distance from obstacle')
+plot(sqrt(((Ox-Px)**2) + ((Oy-Py)**2)),'r')
+subplot(6,1,5)
+plot(Ip,'r')
+ylabel('Current for PL')
+subplot(6,1,6)
+plot(vp,'r')
+ylabel('Activity of PL')
+
+
