@@ -1,0 +1,71 @@
+#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Oct 13 18:14:03 2018
+
+@author: talafakhoury
+"""
+
+
+from brian2 import *
+import matplotlib.pyplot as plt
+
+num_neurons = 100
+duration = 2000*ms
+
+# Parameters
+area=20000*umetre**2
+Cm = 1*ufarad*cm**-2
+Rm = 10*Mohm
+El = -65.0*mV
+EK = -72*mV
+ENa = 55.0*mV 
+E_rest = -60*mV
+tau_m = 10*msecond
+delta_e = 5.0*mV
+V_t = -55*mV
+
+# parameters used in the bug design to give best firing
+a = 0.02
+b = 0.2
+c = -65
+d = 0.5
+
+## Izhikevich equations
+eqs = '''
+dv/dt = (0.04*(v**2) + 5*v + 140 - u + I)/ms : 1
+du/dt = (a*(b*v - u))/ms : 1
+I : 1
+'''
+
+# Threshold and refractoriness are only used for spike counting
+group = NeuronGroup(num_neurons, eqs,
+                    threshold='v > 30',
+                    reset='''v = c ; u = u+d''' , 
+                    method='euler')
+
+group.v = -65
+
+
+
+monitor2=StateMonitor(group,'v',record=True)
+group.I = '(7.0* i) / num_neurons'
+monitor = SpikeMonitor(group) # counts each spike monitor aka peak detector 
+run(duration)
+
+## plot for firing used in the report
+figure(2)
+plot(monitor2.t, monitor2.v[84]) #plot the voltage for neuron 74 (index starts at 0)
+xlim(0,0.4)
+#ylim(-80,30) #set axes limits
+title('Activity of neuron with Izhikevich model')
+xlabel('time')
+ylabel('Voltage')
+
+#You can dump your results to a file to visualize separately 
+savetxt('Vmdata.dat',(monitor2.t, monitor2.v[0]))
+#out=np.loadtxt('Vmdata.dat')
+#plot(out[0],out[1])
+show()
+
+
