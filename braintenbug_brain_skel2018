@@ -28,18 +28,13 @@ outsrx=np.zeros(int(duration/2))
 outsry=np.zeros(int(duration/2))
 outslx=np.zeros(int(duration/2))
 outsly=np.zeros(int(duration/2))
-outI_r=np.zeros(int(duration/2))
+outI_r=np.zeros(int(duration/2)) ## to save current for plotting
 
 # Sensor neurons 
 # parameters for the Izikevich integrate and fire models for the two sensory neurons
-# input to these cells couls be a current with I being a function of distance or, 
+# input to these cells couls be a current with I being a function of distance 
 
-# add function to represent smell propogation in the space, where it has specific values 
-# across the map, and is the strongest at the source of food.
-# the strength of the smell can be integrated in the velocity to make is go faster as
-# it is getting closer to the food
-
-# add memory component to have it remember the location of the food 
+# parameters for Izhikevich model
 a = 0.02
 b = 0.2
 c = -65
@@ -50,7 +45,6 @@ tau_ampa=1.0
 g_synpk=0.67
 g_synmaxval=(g_synpk/(tau_ampa*exp(-1)))
 Esyn_e = 0
-Esyn_i = -80
 
 # firing depending on eucledian distance from food source to x y coordinates of bug
 # x a d y location
@@ -131,17 +125,18 @@ sbl.mag=0
 
 # The virtual bug
 
-taum = 4
+taum = 4 # motor tau that gave a smooth response
 # baselline velocity of movement 
 base_speed = 9.5
 # how fast it turns, how well and accurately it can sense the locaiton of the source
 # if rate turn is fast, it turns directly towards the source of the food 
-turn_rate = 30*Hz
+turn_rate = 30*Hz # increased to 30Hz to allow a faster reaction
 
 # rotation equations that direct the movement with regards to firing 
 # equations for movement here. They correspond to the motor neurons - movement - muscles almost
 # but don't really do anything 
 
+## seting up velocity and movement equations
 bug_eqs = '''
 
 I : 1
@@ -159,9 +154,10 @@ dmotorr/dt = -motorr/taum/ms : 1
 
 # coordinations for bug should also be contained in a group
 bug = NeuronGroup(1, bug_eqs, clock=Clock(0.2*ms),method='euler')
+# initial values and position
 bug.motorl = 0
 bug.motorr = 0
-bug.angle = pi/2
+bug.angle = pi/2 
 bug.x = 0
 bug.y = 0
 
@@ -186,7 +182,6 @@ syn_rr=Synapses(sr, sbl, clock=Clock(0.2*ms), model='''
 		on_pre='''
 		z+= g_synmax
 		''')
-
 
 
 
@@ -231,8 +226,6 @@ def update_positions():
     sl.x = bug.x +  sl.x_disp*sin(bug.angle)+sl.y_disp*cos(bug.angle)
     sl.y = bug.y  - sl.x_disp*cos(bug.angle)+sl.y_disp*sin(bug.angle) 
     
-
-
 
     if ((bug.x-foodx)**2+(bug.y-foody)**2) < 16:
 	food_count += 1
@@ -343,3 +336,4 @@ title('Velocity for motor right and left respectively')
 plot(MB.t/ms, MB.motorr[0],'r')
 subplot(2,1,2)
 plot(MB.t/ms, MB.motorl[0])
+
