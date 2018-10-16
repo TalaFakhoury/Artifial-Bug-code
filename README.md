@@ -1,4 +1,4 @@
-# Artifial-Bug-code
+# Artifial_Bug_code
 All code created for BME 503 - Computational Neuroengineering midterm artificial bug project
 
 Repository contains:
